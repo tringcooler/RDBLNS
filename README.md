@@ -20,7 +20,7 @@ dat = {
 		'key 1 in sub': {
 			'keys in streak lines': 'then values in the last',
 		},
-		'blank lines before key means pop ups': {
+		'blank lines before keys mean to pop up': {
 			'keys begin from the most common parent': 'values always in the last'
 		}
 	},
@@ -43,7 +43,7 @@ keys in streak lines
 then values in the last
 
 
-blank lines before key means pop ups
+blank lines before keys mean to pop up
 keys begin from the most common parent
 values always in the last
 
