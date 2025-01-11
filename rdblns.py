@@ -27,8 +27,12 @@ class c_readable_lines:
 
     SYM_BLNK = ''
 
-    def _error(self, ln, *txts):
-        t = ' '.join((f'Ln {ln+1}:', *(str(v) for v in txts)))
+    def _error_dec(self, ln, *txts):
+        t = ' '.join((f'Dec(Ln {ln+1}):', *(str(v) for v in txts)))
+        raise ValueError(t)
+
+    def _error_enc(self, *txts):
+        t = ' '.join((f'Enc:', *(str(v) for v in txts)))
         raise ValueError(t)
 
     def _decode(self, lines):
@@ -38,13 +42,13 @@ class c_readable_lines:
         def _push_last():
             v, tli = ckv[-1]
             if len(ckv) == 1:
-                self._error(tli, 'invalid singular line:', v)
+                self._error_dec(tli, 'invalid singular line:', v)
             cur = stack[-1]
             klen = len(ckv) - 1
             for i in range(klen):
                 k, tli = ckv[i]
                 if k in cur:
-                    self._error(tli, 'duplicated key:', k)
+                    self._error_dec(tli, 'duplicated key:', k)
                 if i == klen - 1:
                     cur[k] = v
                 else:
@@ -69,7 +73,7 @@ class c_readable_lines:
                 while elcnt > 0:
                     stack.pop()
                     if not stack:
-                        self._error(li-1, 'too many pop ups:', elcnt)
+                        self._error_dec(li-1, 'too many pop ups:', elcnt)
                     elcnt -= 1
             ckv.append((line, li))
         if ckv:
@@ -77,36 +81,41 @@ class c_readable_lines:
         return stack[0]
 
     def _enc_node(self, dat):
-        assert dat
         vs = []
         sp = []
         deep = 0
         if not isinstance(dat, dict):
             vs.append(dat)
             return deep, vs, sp
+        elif not dat:
+            return None
         blank = self.SYM_BLNK
         for k, v in dat.items():
             if k == blank or v == blank:
-                raise ValueError(f'empty line in dat {{{k}: {v}}}')
-            elif not v:
+                self._error_enc(f'empty line in dat {{{k}: {v}}}')
+            nenc = self._enc_node(v)
+            if nenc is None:
                 continue
             if vs:
                 assert deep > 0 and sp
                 sp.append(deep)
-            deep, nvs, nsp = self._enc_node(v)
+            deep, nvs, nsp = nenc
             deep += 1
             vs.append(k)
             sp.append(0)
             vs.extend(nvs)
             sp.extend(nsp)
+        if not vs:
+            return None
         assert len(vs) == len(sp) + 1
         return deep, vs, sp
 
     def _encode(self, dat):
-        if not dat:
-            return
         blank = self.SYM_BLNK
-        _, vs, sp = self._enc_node(dat)
+        enc = self._enc_node(dat)
+        if enc is None:
+            return
+        _, vs, sp = enc
         for i, (v, s) in enumerate(zip(vs, sp)):
             yield v
             psti = i + 0.5
@@ -129,3 +138,8 @@ class c_readable_lines:
             return r
         else:
             return '\n'.join(str(v) for v in r)
+
+    def stream(self, key = None, val = None, **kargs):
+        if key is None:
+            if not val is None:
+                self._error_enc()
