@@ -118,7 +118,6 @@ class c_readable_lines:
         _, vs, sp = enc
         for i, (v, s) in enumerate(zip(vs, sp)):
             yield v
-            psti = i + 0.5
             for _ in range(s):
                 yield blank
         yield vs[-1]
@@ -138,8 +137,3 @@ class c_readable_lines:
             return r
         else:
             return '\n'.join(str(v) for v in r)
-
-    def stream(self, key = None, val = None, **kargs):
-        if key is None:
-            if not val is None:
-                self._error_enc()
