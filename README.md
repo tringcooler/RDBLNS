@@ -12,8 +12,8 @@ A data format with readable lines
 
 source data:
 
-```
-{
+```python
+dat = {
 	'key 1 in root': 'value for key 1',
 	'key 2 in root': 'value for key 2',
 	'key for sub dict': {
@@ -53,14 +53,19 @@ the number of blank lines popping up
 No need for blank line balancing after the last value
 ```
 
-decode / encode by:
+encode / decode by:
 
 ```python
 from rdblns import c_readable_lines
-
-# decode raw lines
-dat = c_readable_lines().decode(raw)
+coder = c_readable_lines()
 
 # encode dat to lines
-lns = c_readable_lines().encode(dat)
+lns = coder.encode(dat)
+
+print(lns)
+
+# decode lines to dat
+dat2 = coder.decode(lns)
+
+assert dat == dat2
 ```
