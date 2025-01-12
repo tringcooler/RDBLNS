@@ -110,17 +110,20 @@ class c_readable_lines:
         assert len(vs) == len(sp) + 1
         return deep, vs, sp
 
-    def _encode(self, dat):
+    def _encode(self, dat, inner = False, **ka):
         blank = self.SYM_BLNK
         enc = self._enc_node(dat)
         if enc is None:
             return
-        _, vs, sp = enc
+        deep, vs, sp = enc
         for i, (v, s) in enumerate(zip(vs, sp)):
             yield v
             for _ in range(s):
                 yield blank
         yield vs[-1]
+        if inner:
+            for _ in range(deep):
+                yield blank
 
     @staticmethod
     def readlines(raw):
@@ -133,7 +136,7 @@ class c_readable_lines:
         return lines
 
     @staticmethod
-    def writelines(lines, *, itr = False):
+    def writelines(lines, *, itr = False, **ka):
         if itr:
             return lines
         else:
@@ -143,18 +146,59 @@ class c_readable_lines:
         return self._decode(self.readlines(raw))
 
     def encode(self, dat, **ka):
-        return self.writelines(self._encode(dat), **ka)
+        return self.writelines(self._encode(dat, **ka), **ka)
 
 readable_lines = c_readable_lines()
 
-class lex_comment:
+def breakable_lines(lines, brk):
+    itr = iter(lines)
+    def _itr_lines(la):
+        yield la
+        for line in itr:
+            if line is brk:
+                return
+            yield line
+    while True:
+        try:
+            lookahead = next(itr)
+        except StopIteration:
+            break
+        yield _itr_lines(lookahead)
 
-    SYM_CMT = '#'
+if __name__ == '__main__':
+    import pdb
+    from pprint import pprint
+    ppr = lambda *a, **ka: pprint(*a, **ka, sort_dicts = False)
 
-    @staticmethod
-    def readlines(raw):
+    def brk_enc():
+        brk = object()
+        for bi, lines in enumerate(breakable_lines(readable_lines.encode({
+                    'dest key 1': brk,
+                    'dest key 2': {
+                        'dest sub key': brk,
+                    },
+                    'another key': 'some values'
+                }, itr = True), brk)):
+            yield from lines
+            if bi == 0:
+                yield '# comment before sub key 1'
+                yield from readable_lines.encode({
+                    'sub key 1': 'sub val 1'
+                }, itr = True, inner = True)
+                yield '# comment before sub key 2'
+                yield from readable_lines.encode({
+                    'sub key 2': {'sub sub key': 'sub val 2'}
+                }, itr = True, inner = True)
+                yield '# comment after sub 2'
+            elif bi == 1:
+                yield '# comment before value'
+                yield from readable_lines.encode(
+                    'just a value', itr = True, inner = True)
+                yield '# comment after value'
+
+    def comment_readlines(raw):
         lines = c_readable_lines.readlines(raw)
-        symcmt = lex_comment.SYM_CMT
+        symcmt = '#'
         for line in lines:
             if line and isinstance(line, str):
                 line = line.strip()
@@ -162,44 +206,8 @@ class lex_comment:
                     continue
             yield line
 
-    @staticmethod
-    def writelines(lines, **ka):
-        symcmt = lex_comment.SYM_CMT
-        def _enc():
-            for line in lines:
-                if line and isinstance(line, tuple):
-                    defer = []
-                    for i, sline in enumerate(line):
-                        if sline is None:
-                            continue
-                        if i > 0:
-                            sline = symcmt + str(sline)
-                        if i%2 == 0:
-                            defer.append(sline)
-                        else:
-                            yield sline
-                    yield from defer
-                else:
-                    yield line
-        return c_readable_lines.writelines(_enc(), **ka)
-
-if __name__ == '__main__':
-    import pdb
-    from pprint import pprint
-    ppr = lambda *a, **ka: pprint(*a, **ka, sort_dicts = False)
-    
-    dat = {
-        ('key 1', 'comment before key 1','comment after key 1', 'comment before key 1 again',  'comment after key 1 again', '...', '...'): {
-            ('sub key 1', None, 'use None to bypass an unused comment'): ('sub val', 'value comments are the same'),
-            'sub key 2': ('sub val 2', None, 'comments always follow their owners')
-        },
-        'key 2': 'val 2'
-    }
-    coder = c_readable_lines()
-
-    lns = lex_comment.writelines(coder.encode(dat, itr=True))
+    lns = readable_lines.writelines(brk_enc())
     print(lns)
-
-    dat2 = coder.decode(lex_comment.readlines(lns))
-    ppr(dat2)
+    dat = readable_lines.decode(comment_readlines(lns))
+    pprint(dat, sort_dicts = False)
     
