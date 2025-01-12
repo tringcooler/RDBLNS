@@ -122,18 +122,84 @@ class c_readable_lines:
                 yield blank
         yield vs[-1]
 
-    def decode(self, raw):
+    @staticmethod
+    def readlines(raw):
         if isinstance(raw, str):
             lines = raw.splitlines()
         elif callable(getattr(raw, 'readlines', None)):
             lines = raw.readlines()
         else:
             lines = raw
-        return self._decode(lines)
+        return lines
 
-    def encode(self, dat, itr = False):
-        r = self._encode(dat)
+    @staticmethod
+    def writelines(lines, *, itr = False):
         if itr:
-            return r
+            return lines
         else:
-            return '\n'.join(str(v) for v in r)
+            return '\n'.join(str(v) for v in lines)
+
+    def decode(self, raw):
+        return self._decode(self.readlines(raw))
+
+    def encode(self, dat, **ka):
+        return self.writelines(self._encode(dat), **ka)
+
+readable_lines = c_readable_lines()
+
+class lex_comment:
+
+    SYM_CMT = '#'
+
+    @staticmethod
+    def readlines(raw):
+        lines = c_readable_lines.readlines(raw)
+        symcmt = lex_comment.SYM_CMT
+        for line in lines:
+            if line and isinstance(line, str):
+                line = line.strip()
+                if line[0] == symcmt:
+                    continue
+            yield line
+
+    @staticmethod
+    def writelines(lines, **ka):
+        symcmt = lex_comment.SYM_CMT
+        def _enc():
+            for line in lines:
+                if line and isinstance(line, tuple):
+                    defer = []
+                    for i, sline in enumerate(line):
+                        if sline is None:
+                            continue
+                        if i > 0:
+                            sline = symcmt + str(sline)
+                        if i%2 == 0:
+                            defer.append(sline)
+                        else:
+                            yield sline
+                    yield from defer
+                else:
+                    yield line
+        return c_readable_lines.writelines(_enc(), **ka)
+
+if __name__ == '__main__':
+    import pdb
+    from pprint import pprint
+    ppr = lambda *a, **ka: pprint(*a, **ka, sort_dicts = False)
+    
+    dat = {
+        ('key 1', 'comment before key 1','comment after key 1', 'comment before key 1 again',  'comment after key 1 again', '...', '...'): {
+            ('sub key 1', None, 'use None to bypass an unused comment'): ('sub val', 'value comments are the same'),
+            'sub key 2': ('sub val 2', None, 'comments always follow their owners')
+        },
+        'key 2': 'val 2'
+    }
+    coder = c_readable_lines()
+
+    lns = lex_comment.writelines(coder.encode(dat, itr=True))
+    print(lns)
+
+    dat2 = coder.decode(lex_comment.readlines(lns))
+    ppr(dat2)
+    
