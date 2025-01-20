@@ -143,9 +143,9 @@ def comment_readlines(raw):
     
     symcmt = '#'
     for line in lines:
-        if line and isinstance(line, str):
+        if isinstance(line, str):
             line = line.strip()
-            if line[0] == symcmt:
+            if line and line[0] == symcmt:
                 # Just bypass comments
                 continue
         yield line
