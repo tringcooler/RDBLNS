@@ -152,12 +152,14 @@ readable_lines = c_readable_lines()
 
 def breakable_lines(lines, brk):
     itr = iter(lines)
+    cbbrk = callable(brk)
     def _itr_lines(la):
         yield la
         for line in itr:
-            if line is brk:
-                return
+            if (cbbrk and brk(line)) or line is brk:
+                return line
             yield line
+        return None
     while True:
         try:
             lookahead = next(itr)
