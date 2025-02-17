@@ -213,16 +213,6 @@ if __name__ == '__main__':
     from pprint import pprint
     ppr = lambda *a: pprint(*a, sort_dicts=False)
 
-    def foo(itr):
-        #_, vs = zip(*zip(range(3), itr)) # zip(itr, range(3)) will take 4
-        vs = tuple(next(itr) for _ in range(3))
-        print(vs)
-        if vs == (3, 4, 5):
-            yield 'abc'
-    for i in trans_lines(range(10), foo, '__eols__'):
-        print(i)
-    assert False
-
     src = [{
         'a value': 'value 1',
         'this is a list': [
@@ -251,6 +241,22 @@ if __name__ == '__main__':
             r[k] = list2dict(v)
         return r
 
+    def dict2list(src):
+        if not isinstance(src, dict):
+            return src
+        rs = None
+        for k, v in src.items():
+            v = dict2list(v)
+            if k.startswith('__') and k[2:].isdigit():
+                if rs is None:
+                    rs = []
+                rs.append(v)
+            else:
+                if rs is None:
+                    rs = {}
+                rs[k] = v
+        return rs
+
     def trim_listkey_1(itr):
         bline = next(itr)
         if bline == '__0':
@@ -278,11 +284,37 @@ if __name__ == '__main__':
             return
         yield bline + cline[2:]
 
+    def make_expand_listkey():
+        kidx = [0]
+        def expand_listkey(itr):
+            line = next(itr)
+            if line is None:
+                return
+            llen = len(line)
+            rs = []
+            for i, c in enumerate(reversed(line)):
+                listkey = f'__{kidx[0]}'
+                if c == ':':
+                    rs.append(listkey)
+                elif c == ',':
+                    rs.append(listkey)
+                    rs.append('')
+                else:
+                    rs.append(line[:llen - i])
+                    break
+                kidx[0] += 1
+            else:
+                rs.append('')
+            if len(rs) > 1:
+                for rline in reversed(rs):
+                    yield rline
+        return expand_listkey
+
     ppr(list2dict(src))
+    #print('===')
+    #print(readable_lines.encode(list2dict(src)))
     print('===')
-    print(readable_lines.encode(list2dict(src)))
-    print('===')
-    print(readable_lines.writelines(
+    rlines = readable_lines.writelines(
         trans_lines(
             trans_lines(
                 readable_lines.encode(list2dict(src), itr=True),
@@ -290,4 +322,14 @@ if __name__ == '__main__':
             ),
             trim_listkey_2,
         )
+    )
+    print(rlines)
+    print('===')
+    dat = dict2list(readable_lines.decode(
+        trans_lines(
+            readable_lines.readlines(rlines),
+            make_expand_listkey(),
+        )
     ))
+    assert src == dat
+    ppr(dat)
