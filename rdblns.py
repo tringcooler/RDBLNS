@@ -166,3 +166,56 @@ def breakable_lines(lines, brk):
         except StopIteration:
             break
         yield _itr_lines(lookahead)
+
+def trans_lines(lines, cb_trans_itr):
+    itr = iter(lines)
+    cch = []
+    flg_src_done = [False]
+    flg_cch_rst = [None]
+    def _itr_cch():
+        while True:
+            cch_idx = 0
+            while flg_cch_rst[0] is None:
+                if flg_src_done[0]:
+                    yield None
+                    continue
+                while cch_idx >= len(cch):
+                    try:
+                        line = next(itr)
+                    except StopIteration:
+                        flg_src_done[0] = True
+                        break
+                    cch.append(line)
+                if flg_src_done[0]:
+                    continue
+                yield cch[cch_idx]
+                cch_idx += 1
+            if flg_cch_rst[0]:
+                #assert flg_cch_rst[0] is True
+                for _ in range(cch_idx):
+                    # drop transed lines
+                    if not cch:
+                        break
+                    cch.pop(0)
+            flg_cch_rst[0] = None
+    citr = _itr_cch()
+    while cch or not flg_src_done[0]:
+        transed = False
+        for tline in cb_trans_itr(citr):
+            transed = True
+            yield tline
+        print('cch', cch)
+        assert cch or flg_src_done[0]
+        if not transed and cch:
+            yield cch.pop(0)
+        flg_cch_rst[0] = transed
+
+if __name__ == '__main__':
+    def foo(itr):
+        #_, vs = zip(*zip(range(3), itr)) # zip(itr, range(3)) will take 4
+        vs = tuple(next(itr) for _ in range(3))
+        print(vs)
+        if vs == (3, 4, 5):
+            yield 'abc'
+    for i in trans_lines(range(10), foo):
+        print(i)
