@@ -204,17 +204,63 @@ def trans_lines(lines, cb_trans_itr, EOLS= None):
             yield tline
         if not cch:
             break
-        print('cch', cch)
         if not transed:
             yield cch.pop(0)
         flg_cch_rst[0] = transed
 
 if __name__ == '__main__':
-    def foo(itr):
-        #_, vs = zip(*zip(range(3), itr)) # zip(itr, range(3)) will take 4
-        vs = tuple(next(itr) for _ in range(3))
-        print(vs)
-        if vs == (3, 4, 5):
-            yield 'abc'
-    for i in trans_lines(range(10), foo, '__eols__'):
-        print(i)
+    from pprint import pprint
+    ppr = lambda *a: pprint(*a, sort_dicts=False)
+
+    src = [{
+        'a value': 'value 1',
+        'this is a list': [
+            {
+                'the meber': 'can be a dict',
+                'as normal': {'recursived': 'value r'},
+            },
+            'or a value',
+            ['or', 'another', 'list'],
+            [[['and', 'or'], 'more'], ['recursived', 'lists']],
+        ],
+        'this is a dict': {
+            'a list inside the dict': ['la', 'lb', 'lc']
+        },
+    }, 'etc']
+
+    def list2dict(src):
+        if isinstance(src, dict):
+            itr = src.items()
+        elif isinstance(src, list):
+            itr = ((f'__{i}', v) for i, v in enumerate(src))
+        else:
+            return src
+        r = {}
+        for k, v in itr:
+            r[k] = list2dict(v)
+        return r
+
+    def trim_listkey(itr):
+        symsplit = ','
+        bline, cline = [next(itr) for _ in range(2)]
+        if bline == '__0':
+            yield symsplit + cline
+            return
+        aline = next(itr)
+        if not cline or not cline.startswith('__'):
+            return
+        cv = cline[2:]
+        if not cv.isdigit():
+            return
+        cv = int(cv)
+        if cv == 0:
+            return
+        yield symsplit.join((bline, aline))
+
+    ppr(list2dict(src))
+    print('===')
+    print(readable_lines.encode(list2dict(src)))
+    print('===')
+    print(readable_lines.writelines(
+        trans_lines(readable_lines.encode(list2dict(src), itr=True), trim_listkey)
+    ))
