@@ -167,26 +167,24 @@ def breakable_lines(lines, brk):
             break
         yield _itr_lines(lookahead)
 
-def trans_lines(lines, cb_trans_itr):
+def trans_lines(lines, cb_trans_itr, EOLS= None):
     itr = iter(lines)
     cch = []
-    flg_src_done = [False]
     flg_cch_rst = [None]
     def _itr_cch():
         while True:
             cch_idx = 0
             while flg_cch_rst[0] is None:
-                if flg_src_done[0]:
-                    yield None
-                    continue
+                src_done = False
                 while cch_idx >= len(cch):
                     try:
                         line = next(itr)
                     except StopIteration:
-                        flg_src_done[0] = True
+                        src_done = True
                         break
                     cch.append(line)
-                if flg_src_done[0]:
+                if src_done:
+                    yield EOLS
                     continue
                 yield cch[cch_idx]
                 cch_idx += 1
@@ -199,14 +197,15 @@ def trans_lines(lines, cb_trans_itr):
                     cch.pop(0)
             flg_cch_rst[0] = None
     citr = _itr_cch()
-    while cch or not flg_src_done[0]:
+    while True:
         transed = False
         for tline in cb_trans_itr(citr):
             transed = True
             yield tline
+        if not cch:
+            break
         print('cch', cch)
-        assert cch or flg_src_done[0]
-        if not transed and cch:
+        if not transed:
             yield cch.pop(0)
         flg_cch_rst[0] = transed
 
@@ -217,5 +216,5 @@ if __name__ == '__main__':
         print(vs)
         if vs == (3, 4, 5):
             yield 'abc'
-    for i in trans_lines(range(10), foo):
+    for i in trans_lines(range(10), foo, '__eols__'):
         print(i)
