@@ -170,11 +170,11 @@ def breakable_lines(lines, brk):
 def trans_lines(lines, cb_trans_itr, EOLS= None):
     itr = iter(lines)
     cch = []
-    flg_cch_rst = [None]
+    transed = []
     def _itr_cch():
         while True:
             cch_idx = 0
-            while flg_cch_rst[0] is None:
+            while not transed:
                 src_done = False
                 while cch_idx >= len(cch):
                     try:
@@ -188,29 +188,40 @@ def trans_lines(lines, cb_trans_itr, EOLS= None):
                     continue
                 yield cch[cch_idx]
                 cch_idx += 1
-            if flg_cch_rst[0]:
-                #assert flg_cch_rst[0] is True
+            assert not transed[0] is None or len(transed) == 1
+            if not transed[0] is None:
                 for _ in range(cch_idx):
                     # drop transed lines
                     if not cch:
                         break
                     cch.pop(0)
-            flg_cch_rst[0] = None
+                for tline in reversed(transed):
+                    cch.insert(0, tline)
+            transed.clear()
     citr = _itr_cch()
     while True:
-        transed = False
         for tline in cb_trans_itr(citr):
-            transed = True
-            yield tline
-        if not cch:
-            break
+            transed.append(tline)
         if not transed:
-            yield cch.pop(0)
-        flg_cch_rst[0] = transed
+            if cch:
+                yield cch.pop(0)
+                transed.append(None)
+            else:
+                break
 
 if __name__ == '__main__':
     from pprint import pprint
     ppr = lambda *a: pprint(*a, sort_dicts=False)
+
+    def foo(itr):
+        #_, vs = zip(*zip(range(3), itr)) # zip(itr, range(3)) will take 4
+        vs = tuple(next(itr) for _ in range(3))
+        print(vs)
+        if vs == (3, 4, 5):
+            yield 'abc'
+    for i in trans_lines(range(10), foo, '__eols__'):
+        print(i)
+    assert False
 
     src = [{
         'a value': 'value 1',
@@ -221,7 +232,7 @@ if __name__ == '__main__':
             },
             'or a value',
             ['or', 'another', 'list'],
-            [[['and', 'or'], 'more'], ['recursived', 'lists']],
+            [[['and', 'or'], 'more'], [['recursived'], 'lists']],
         ],
         'this is a dict': {
             'a list inside the dict': ['la', 'lb', 'lc']
@@ -240,13 +251,12 @@ if __name__ == '__main__':
             r[k] = list2dict(v)
         return r
 
-    def trim_listkey(itr):
-        symsplit = ','
-        bline, cline = [next(itr) for _ in range(2)]
+    def trim_listkey_1(itr):
+        bline = next(itr)
         if bline == '__0':
-            yield symsplit + cline
+            yield '__:'
             return
-        aline = next(itr)
+        cline = next(itr)
         if not cline or not cline.startswith('__'):
             return
         cv = cline[2:]
@@ -255,12 +265,29 @@ if __name__ == '__main__':
         cv = int(cv)
         if cv == 0:
             return
-        yield symsplit.join((bline, aline))
+        yield bline + '__,'
+
+    def trim_listkey_2(itr):
+        symsplits = ('__:', '__,')
+        bline = next(itr)
+        if bline in symsplits:
+            yield bline[2:]
+            return
+        cline = next(itr)
+        if not cline in symsplits:
+            return
+        yield bline + cline[2:]
 
     ppr(list2dict(src))
     print('===')
     print(readable_lines.encode(list2dict(src)))
     print('===')
     print(readable_lines.writelines(
-        trans_lines(readable_lines.encode(list2dict(src), itr=True), trim_listkey)
+        trans_lines(
+            trans_lines(
+                readable_lines.encode(list2dict(src), itr=True),
+                trim_listkey_1,
+            ),
+            trim_listkey_2,
+        )
     ))
